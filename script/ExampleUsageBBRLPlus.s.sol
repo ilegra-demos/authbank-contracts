@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
-import {BBRLPlus} from "../src/BBRLPlus.sol";
+import {DEMOBR} from "../src/BBRLPlus.sol";
 
 /**
  * @title Example Usage BBRLPlus Script
@@ -10,7 +10,7 @@ import {BBRLPlus} from "../src/BBRLPlus.sol";
  * @dev Use este script como referencia para implementar seus proprios workflows
  */
 contract ExampleUsageBBRLPlus is Script {
-    BBRLPlus public bbrlPlus;
+    DEMOBR public bbrlPlus;
     
     // Endereco do contrato implantado - deve ser configurado antes de executar
     address public constant CONTRACT_ADDRESS = address(0); // Substitua pelo endereco real
@@ -22,7 +22,7 @@ contract ExampleUsageBBRLPlus is Script {
     
     function setUp() public {
         // Conecta ao contrato ja implantado
-        bbrlPlus = BBRLPlus(CONTRACT_ADDRESS);
+        bbrlPlus = DEMOBR(CONTRACT_ADDRESS);
     }
     
     /**
@@ -40,18 +40,15 @@ contract ExampleUsageBBRLPlus is Script {
     
     /**
      * @notice Exemplo 1: Setup inicial do sistema
-     * @dev Adiciona usuarios a allowlist e minta tokens iniciais
+     * @dev Modelo deny list: nenhum usuario e negado inicialmente; apenas mint de tokens
      */
     function setupExample() public {
         vm.startBroadcast();
         
         console.log("=== EXEMPLO: SETUP INICIAL ===");
         
-        // 1. Adicionar usuarios a allowlist
-        console.log("1. Adicionando usuarios a allowlist...");
-        bbrlPlus.addToAllowlist(USER_A);
-        bbrlPlus.addToAllowlist(USER_B);
-        bbrlPlus.addToAllowlist(USER_C);
+        // 1. Modelo deny list: nenhum usuario adicionado (todos permitidos)
+        console.log("1. Modelo deny list: nenhum usuario negado inicialmente...");
         
         // 2. Mintar tokens iniciais
         console.log("2. Mintando tokens iniciais...");
@@ -62,7 +59,7 @@ contract ExampleUsageBBRLPlus is Script {
         // 3. Verificar setup
         console.log("3. Verificando setup...");
         console.log("Total supply:", bbrlPlus.totalSupply());
-        console.log("Allowlist size:", bbrlPlus.getAllowlistLength());
+    console.log("Denylist size:", bbrlPlus.getDenylistLength());
         console.log("USER_A balance:", bbrlPlus.balanceOf(USER_A));
         console.log("USER_B balance:", bbrlPlus.balanceOf(USER_B));
         console.log("USER_C balance:", bbrlPlus.balanceOf(USER_C));
@@ -163,18 +160,18 @@ contract ExampleUsageBBRLPlus is Script {
         
         // 1. Simular que um endereco nao autorizado tem tokens
         console.log("1. Simulando cenario de recuperacao...");
-        console.log("(Em um cenario real, este endereco teria recebido tokens antes de ser removido da allowlist)");
+    console.log("(Em um cenario real, este endereco teria recebido tokens antes de ser colocado na deny list)");
         
-        // 2. Verificar se o endereco esta na allowlist
-        bool isInAllowlist = bbrlPlus.isInAllowlist(unauthorizedUser);
-        console.log("Endereco esta na allowlist:", isInAllowlist);
+    // 2. Verificar se o endereco esta na deny list
+    bool isDeniedAddr = bbrlPlus.isDenied(unauthorizedUser);
+    console.log("Endereco esta na denylist:", isDeniedAddr);
         
         // 3. Verificar saldo do endereco nao autorizado
         uint256 unauthorizedBalance = bbrlPlus.balanceOf(unauthorizedUser);
         console.log("Saldo do endereco nao autorizado:", unauthorizedBalance);
         
         // 4. Se tiver saldo e nao estiver autorizado, recuperar
-        if (unauthorizedBalance > 0 && !isInAllowlist) {
+    if (unauthorizedBalance > 0 && isDeniedAddr) {
             console.log("4. Recuperando tokens...");
             bbrlPlus.recoverTokens(unauthorizedUser, "RECOVERY-001", unauthorizedBalance);
             console.log("Tokens recuperados com sucesso!");
@@ -183,8 +180,8 @@ contract ExampleUsageBBRLPlus is Script {
             if (unauthorizedBalance == 0) {
                 console.log("   Motivo: Endereco nao tem saldo");
             }
-            if (isInAllowlist) {
-                console.log("   Motivo: Endereco esta autorizado");
+            if (!isDeniedAddr) {
+                console.log("   Motivo: Endereco nao esta na deny list");
             }
         }
         
@@ -208,16 +205,16 @@ contract ExampleUsageBBRLPlus is Script {
         console.log("   Supply Total:", bbrlPlus.totalSupply());
         console.log("   Pausado:", bbrlPlus.paused());
         
-        // 2. Informacoes da allowlist
-        console.log("2. ALLOWLIST:");
-        uint256 allowlistLength = bbrlPlus.getAllowlistLength();
-        console.log("   Total de enderecos:", allowlistLength);
+        // 2. Informacoes da deny list
+        console.log("2. DENYLIST:");
+    uint256 denylistLength = bbrlPlus.getDenylistLength();
+    console.log("   Total de enderecos:", denylistLength);
         
-        if (allowlistLength > 0) {
-            console.log("   Primeiros 3 enderecos:");
-            uint256 maxToShow = allowlistLength > 3 ? 3 : allowlistLength;
+        if (denylistLength > 0) {
+            console.log("   Primeiros 3 enderecos negados:");
+            uint256 maxToShow = denylistLength > 3 ? 3 : denylistLength;
             for (uint256 i = 0; i < maxToShow; i++) {
-                address addr = bbrlPlus.getAllowlistAddress(i);
+                address addr = bbrlPlus.getDenylistAddress(i);
                 uint256 balance = bbrlPlus.balanceOf(addr);
                 console.log("     Endereco:", addr);
                 console.log("     Saldo:", balance);
@@ -227,35 +224,35 @@ contract ExampleUsageBBRLPlus is Script {
         // 3. Estatisticas de distribuicao
         console.log("3. ESTATISTICAS DE DISTRIBUICAO:");
         uint256 totalSupply = bbrlPlus.totalSupply();
-        uint256 totalInAllowlist = 0;
+    uint256 totalInDenied = 0;
         uint256 activeHolders = 0;
         
-        for (uint256 i = 0; i < allowlistLength; i++) {
-            address addr = bbrlPlus.getAllowlistAddress(i);
+        for (uint256 i = 0; i < denylistLength; i++) {
+            address addr = bbrlPlus.getDenylistAddress(i);
             uint256 balance = bbrlPlus.balanceOf(addr);
-            totalInAllowlist += balance;
+            totalInDenied += balance;
             if (balance > 0) {
                 activeHolders++;
             }
         }
         
-        console.log("   Total em enderecos autorizados:", totalInAllowlist);
+    console.log("   Total em enderecos negados:", totalInDenied);
         console.log("   Holders ativos:", activeHolders);
         
         if (totalSupply > 0) {
-            uint256 percentage = (totalInAllowlist * 100) / totalSupply;
-            console.log("   % do supply em enderecos autorizados:", percentage);
+            uint256 percentage = (totalInDenied * 100) / totalSupply;
+            console.log("   % do supply em enderecos negados:", percentage);
         }
         
         // 4. Verificacao de seguranca
         console.log("4. VERIFICACAO DE SEGURANCA:");
         console.log("   Contrato pausado:", bbrlPlus.paused());
         
-        uint256 orphanedTokens = totalSupply - totalInAllowlist;
+    uint256 orphanedTokens = totalInDenied;
         if (orphanedTokens > 0) {
             console.log("   AVISO: Tokens em enderecos nao autorizados:", orphanedTokens);
         } else {
-            console.log("   Todos os tokens em enderecos autorizados: OK");
+            console.log("   Nenhum token em enderecos negados: OK");
         }
         
         console.log("Relatorio de consultas concluido!");
@@ -271,14 +268,12 @@ contract ExampleUsageBBRLPlus is Script {
         console.log("=== EXEMPLO: ONBOARDING DE USUARIO ===");
         console.log("Novo usuario:", newUser);
         
-        // 1. Verificar se ja esta na allowlist
-        bool alreadyInList = bbrlPlus.isInAllowlist(newUser);
-        console.log("1. Usuario ja na allowlist:", alreadyInList);
+        // 1. Verificar se ja esta na deny list
+        bool alreadyDenied = bbrlPlus.isDenied(newUser);
+        console.log("1. Usuario ja na deny list:", alreadyDenied);
         
-        if (!alreadyInList) {
-            // 2. Adicionar a allowlist
-            console.log("2. Adicionando usuario a allowlist...");
-            bbrlPlus.addToAllowlist(newUser);
+        if (!alreadyDenied) {
+            console.log("2. Usuario nao esta na deny list (permitido por padrao)...");
             
             // 3. Mintar tokens iniciais
             console.log("3. Mintando tokens iniciais...");
@@ -287,12 +282,12 @@ contract ExampleUsageBBRLPlus is Script {
             
             // 4. Verificar resultado
             console.log("4. Verificando resultado do onboarding...");
-            console.log("   Na allowlist:", bbrlPlus.isInAllowlist(newUser));
+            console.log("   Na deny list:", bbrlPlus.isDenied(newUser));
             console.log("   Saldo:", bbrlPlus.balanceOf(newUser));
             
             console.log("Onboarding concluido com sucesso!");
         } else {
-            console.log("Usuario ja esta na allowlist - onboarding nao necessario");
+            console.log("Usuario ja esta na deny list - revisar necessidade");
         }
         
         vm.stopBroadcast();

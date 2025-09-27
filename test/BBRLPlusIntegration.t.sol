@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {Test, console} from "forge-std/Test.sol";
-import {BBRLPlus} from "../src/BBRLPlus.sol";
+import {DEMOBR} from "../src/BBRLPlus.sol";
 import {LibErrors} from "../src/Utils/Errors.sol";
 
 /**
@@ -10,7 +10,7 @@ import {LibErrors} from "../src/Utils/Errors.sol";
  * @notice Integration and advanced scenario tests for BBRLPlus token
  */
 contract BBRLPlusIntegrationTest is Test {
-    BBRLPlus public token;
+    DEMOBR public token;
     
     // Test addresses
     address public constant ADMIN = address(0x1);
@@ -30,7 +30,7 @@ contract BBRLPlusIntegrationTest is Test {
     uint256 public constant SMALL_AMOUNT = 100e18;
     
     function setUp() public {
-        token = new BBRLPlus(
+        token = new DEMOBR(
             ADMIN,
             PAUSER,
             MINTER,
@@ -40,15 +40,7 @@ contract BBRLPlusIntegrationTest is Test {
             "BBRL+INT"
         );
         
-        // Setup allowlist
-        vm.startPrank(ADMIN);
-        token.addToAllowlist(USER_A);
-        token.addToAllowlist(USER_B);
-        token.addToAllowlist(USER_C);
-        token.addToAllowlist(MINTER);
-        token.addToAllowlist(BURNER);
-        token.addToAllowlist(RECOVERY);
-        vm.stopPrank();
+    // Deny list model: no need to add addresses initially (all allowed unless denied)
     }
     
     // ========== COMPLETE WORKFLOW TESTS ==========
@@ -58,13 +50,10 @@ contract BBRLPlusIntegrationTest is Test {
         
         console.log("=== Starting User Onboarding Workflow ===");
         
-        // Step 1: Admin adds new user to allowlist
+    // Step 1: (Deny list) Ensure new user is not denied
         address newUser = address(0x100);
-        vm.prank(ADMIN);
-        token.addToAllowlist(newUser);
-        
-        console.log("Step 1: Added user to allowlist");
-        assertTrue(token.isInAllowlist(newUser));
+    assertFalse(token.isDenied(newUser));
+    console.log("Step 1: User not in deny list");
         
         // Step 2: Minter mints initial tokens
         vm.prank(MINTER);
@@ -88,7 +77,7 @@ contract BBRLPlusIntegrationTest is Test {
         
         // Step 4: Verify final state
         assertEq(token.totalSupply(), MEDIUM_AMOUNT);
-        assertTrue(token.isInAllowlist(newUser));
+    assertFalse(token.isDenied(newUser));
         
         console.log("=== User Onboarding Workflow Complete ===");
     }
@@ -149,21 +138,18 @@ contract BBRLPlusIntegrationTest is Test {
         
         console.log("=== Starting Malicious User Recovery ===");
         
-        // Setup: Add malicious user and mint tokens
-        vm.prank(ADMIN);
-        token.addToAllowlist(MALICIOUS_USER);
+    // Setup: Mint tokens to user (assumed allowed)
         
         vm.prank(MINTER);
         token.mintRef(MALICIOUS_USER, MEDIUM_AMOUNT, ref);
         
         console.log("Setup: Malicious user received tokens");
         
-        // Detection: Remove malicious user from allowlist
-        vm.prank(ADMIN);
-        token.removeFromAllowlist(MALICIOUS_USER);
-        
-        console.log("Detection: Removed malicious user from allowlist");
-        assertFalse(token.isInAllowlist(MALICIOUS_USER));
+    // Detection: Add malicious user to deny list
+    vm.prank(ADMIN);
+    token.addToDenylist(MALICIOUS_USER);
+    console.log("Detection: Added malicious user to deny list");
+    assertTrue(token.isDenied(MALICIOUS_USER));
         
         // Recovery: Recover tokens from malicious user
         uint256 recoveredAmount = token.balanceOf(MALICIOUS_USER);
@@ -181,39 +167,39 @@ contract BBRLPlusIntegrationTest is Test {
     
     // ========== STRESS TESTS ==========
     
-    function test_LargeScaleAllowlistOperations() public {
-        console.log("=== Testing Large Scale Allowlist Operations ===");
+    function test_LargeScaleDenylistOperations() public {
+        console.log("=== Testing Large Scale Denylist Operations ===");
         
-        uint256 initialLength = token.getAllowlistLength();
+    uint256 initialLength = token.getDenylistLength();
         uint256 usersToAdd = 100;
         
-        // Add many users to allowlist
+        // Add many users to deny list
         vm.startPrank(ADMIN);
         for (uint256 i = 0; i < usersToAdd; i++) {
             address newUser = address(uint160(0x1000 + i));
-            token.addToAllowlist(newUser);
+            token.addToDenylist(newUser);
         }
         vm.stopPrank();
         
-        assertEq(token.getAllowlistLength(), initialLength + usersToAdd);
+        assertEq(token.getDenylistLength(), initialLength + usersToAdd);
         
         // Verify random users in the list
         for (uint256 i = 0; i < 10; i++) {
             address randomUser = address(uint160(0x1000 + (i * 10)));
-            assertTrue(token.isInAllowlist(randomUser));
+            assertTrue(token.isDenied(randomUser));
         }
         
-        // Remove half of them
+        // Remove half of them from deny list
         vm.startPrank(ADMIN);
         for (uint256 i = 0; i < usersToAdd / 2; i++) {
             address userToRemove = address(uint160(0x1000 + i));
-            token.removeFromAllowlist(userToRemove);
+            token.removeFromDenylist(userToRemove);
         }
         vm.stopPrank();
         
-        assertEq(token.getAllowlistLength(), initialLength + (usersToAdd / 2));
+        assertEq(token.getDenylistLength(), initialLength + (usersToAdd / 2));
         
-        console.log("Large scale allowlist operations completed successfully");
+        console.log("Large scale denylist operations completed successfully");
     }
     
     function test_HighVolumeTransactions() public {
@@ -276,10 +262,10 @@ contract BBRLPlusIntegrationTest is Test {
         assertEq(token.balanceOf(USER_B), 0);
     }
     
-    function test_MaximumAllowlistSize() public {
-        console.log("=== Testing Maximum Allowlist Size ===");
+    function test_MaximumDenylistSize() public {
+        console.log("=== Testing Maximum Denylist Size ===");
         
-        uint256 initialSize = token.getAllowlistLength();
+    uint256 initialSize = token.getDenylistLength();
         uint256 maxNewUsers = 500; // Reasonable test size
         
         vm.startPrank(ADMIN);
@@ -287,19 +273,19 @@ contract BBRLPlusIntegrationTest is Test {
         // Add users up to reasonable limit
         for (uint256 i = 0; i < maxNewUsers; i++) {
             address newUser = address(uint160(0x2000 + i));
-            token.addToAllowlist(newUser);
+            token.addToDenylist(newUser);
             
             // Verify every 100th user to save gas
             if (i % 100 == 0) {
-                assertTrue(token.isInAllowlist(newUser));
+                assertTrue(token.isDenied(newUser));
             }
         }
         
         vm.stopPrank();
         
-        assertEq(token.getAllowlistLength(), initialSize + maxNewUsers);
+        assertEq(token.getDenylistLength(), initialSize + maxNewUsers);
         
-        console.log("Maximum allowlist size test completed");
+        console.log("Maximum denylist size test completed");
     }
     
     function test_RoleTransition() public {
@@ -316,14 +302,12 @@ contract BBRLPlusIntegrationTest is Test {
         token.grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         token.grantRole(MINTER_ROLE, newMinter);
         
-        // Add new addresses to allowlist
-        token.addToAllowlist(newAdmin);
-        token.addToAllowlist(newMinter);
+    // (Optional) could deny addresses here; not needed for permission
         vm.stopPrank();
         
-        // New admin can perform admin operations
+        // New admin can perform an admin operation (grant MINTER role to itself again - harmless)
         vm.prank(newAdmin);
-        token.addToAllowlist(address(0x999));
+        token.grantRole(MINTER_ROLE, newAdmin);
         
         // New minter can mint tokens
         vm.prank(newMinter);
@@ -388,28 +372,28 @@ contract BBRLPlusIntegrationTest is Test {
     
     // ========== GAS OPTIMIZATION TESTS ==========
     
-    function test_GasEfficiency_AllowlistOperations() public {
+    function test_GasEfficiency_DenylistOperations() public {
         uint256 gasBefore;
         uint256 gasAfter;
         
         address testUser = address(0x300);
         
-        // Measure gas for adding to allowlist
+    // Measure gas for adding to deny list
         gasBefore = gasleft();
         vm.prank(ADMIN);
-        token.addToAllowlist(testUser);
+    token.addToDenylist(testUser);
         gasAfter = gasleft();
         
         uint256 gasUsedAdd = gasBefore - gasAfter;
-        console.log("Gas used for addToAllowlist:", gasUsedAdd);
+    console.log("Gas used for addToDenylist:", gasUsedAdd);
         
-        // Measure gas for checking allowlist
+    // Measure gas for checking deny list
         gasBefore = gasleft();
-        token.isInAllowlist(testUser);
+    token.isDenied(testUser);
         gasAfter = gasleft();
         
         uint256 gasUsedCheck = gasBefore - gasAfter;
-        console.log("Gas used for isInAllowlist:", gasUsedCheck);
+    console.log("Gas used for isDenied:", gasUsedCheck);
         
         // Basic assertions (these values would need to be calibrated based on expected performance)
         assertLt(gasUsedAdd, 100000); // Should be reasonable
@@ -441,9 +425,7 @@ contract BBRLPlusIntegrationTest is Test {
         uint256 ownerPrivateKey = 0x1234;
         address owner = vm.addr(ownerPrivateKey);
         
-        // Add owner to allowlist and mint tokens
-        vm.prank(ADMIN);
-        token.addToAllowlist(owner);
+    // Owner is allowed by default (not in deny list)
         
         vm.prank(MINTER);
         token.mintRef(owner, MEDIUM_AMOUNT, "PERMIT-TEST");

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
-import {BBRLPlus} from "../src/BBRLPlus.sol";
+import {DEMOBR} from "../src/BBRLPlus.sol";
 
 /**
  * @title Deploy BBRLPlus Script
@@ -12,22 +12,22 @@ import {BBRLPlus} from "../src/BBRLPlus.sol";
 contract DeployBBRLPlus is Script {
     
     // Configuracao dos enderecos das roles - MODIFIQUE ANTES DO DEPLOY
-    address public constant DEFAULT_ADMIN = 0x4C795D49C742486F3D1Dd78ce4CB95e838060dB2;
-    address public constant PAUSER = 0x4C795D49C742486F3D1Dd78ce4CB95e838060dB2;
-    address public constant MINTER = 0x4C795D49C742486F3D1Dd78ce4CB95e838060dB2;
-    address public constant BURNER = 0x4C795D49C742486F3D1Dd78ce4CB95e838060dB2;
-    address public constant RECOVERY = 0x4C795D49C742486F3D1Dd78ce4CB95e838060dB2;
+    address public constant DEFAULT_ADMIN = 0xb5d6B26818A777Aff58C46C297458fFa6fdd2426;
+    address public constant PAUSER = 0xeB6197375Bc88A8E6673b909F4E3B6Ee3ead8255;
+    address public constant MINTER = 0xE4055E9875087ee2a6d93Fd6268d12e4Bd6551B3;
+    address public constant BURNER = 0x26Df3718044BEF34e7bdB9FbEf26771F5d1fa51a;
+    address public constant RECOVERY = 0x8ca109d240976eAAE8D0AFc0cf61B9a1BEBD0711;
     
     // Configuracao do token
-    string public constant TOKEN_NAME = "Brazilian Real Plus";
-    string public constant TOKEN_SYMBOL = "BBRL+";
+    string public constant TOKEN_NAME = "DEMO BR";
+    string public constant TOKEN_SYMBOL = "DEMOBR";
     
     function setUp() public {}
 
     function run() public {
         vm.startBroadcast();
 
-        console.log("=== INICIANDO DEPLOY DO BBRLPLUS ===");
+        console.log("=== INICIANDO DEPLOY DO Reward BR ===");
         console.log("Configuracao:");
         console.log("  Nome:", TOKEN_NAME);
         console.log("  Simbolo:", TOKEN_SYMBOL);
@@ -38,7 +38,7 @@ contract DeployBBRLPlus is Script {
         console.log("  Recovery:", RECOVERY);
 
         // Deploy do contrato
-        BBRLPlus bbrlPlus = new BBRLPlus(
+        DEMOBR bbrlPlus = new DEMOBR(
             DEFAULT_ADMIN,  // defaultAdmin
             PAUSER,         // pauser
             MINTER,         // minter
@@ -52,7 +52,7 @@ contract DeployBBRLPlus is Script {
         console.log("Endereco do contrato:", address(bbrlPlus));
         console.log("Supply inicial:", bbrlPlus.totalSupply());
         console.log("Contrato pausado:", bbrlPlus.paused());
-        console.log("Allowlist vazia:", bbrlPlus.getAllowlistLength() == 0);
+        console.log("Denylist vazia:", bbrlPlus.getDenylistLength() == 0);
 
         // Verificar roles atribuidas
         console.log("=== VERIFICACAO DE ROLES ===");
@@ -98,7 +98,7 @@ contract DeployBBRLPlus is Script {
 
         console.log("=== DEPLOY CUSTOMIZADO DO BBRLPLUS ===");
         
-        BBRLPlus bbrlPlus = new BBRLPlus(
+        DEMOBR bbrlPlus = new DEMOBR(
             defaultAdmin,
             pauser,
             minter,

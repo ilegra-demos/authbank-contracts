@@ -10,7 +10,7 @@ import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20P
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {LibErrors} from "./Utils/Errors.sol";
 
-contract BBRLPlus is ERC20, ERC20Burnable, ERC20Pausable, AccessControl, ERC20Permit {
+contract DEMOBR is ERC20, ERC20Burnable, ERC20Pausable, AccessControl, ERC20Permit {
     
     using EnumerableSet for EnumerableSet.AddressSet;
     
@@ -45,7 +45,8 @@ contract BBRLPlus is ERC20, ERC20Burnable, ERC20Pausable, AccessControl, ERC20Pe
 	 */
 	bytes32 public constant RECOVERY_ROLE = keccak256("RECOVERY_ROLE");
 
-    EnumerableSet.AddressSet internal _allowList;
+	// Deny list of addresses that are NOT allowed to participate (cannot send or receive tokens).
+	EnumerableSet.AddressSet internal _denyList;
 
     /**
 	 * @notice This event is logged when the funds are recovered from an address that is not allowed
@@ -146,20 +147,20 @@ contract BBRLPlus is ERC20, ERC20Burnable, ERC20Pausable, AccessControl, ERC20Pe
 	}
 
     /**
-	 * @notice This is a function used to recover tokens from an address not on the Allowlist.
+	 * @notice This is a function used to recover tokens from an address that is on the deny list.
 	 *
 	 * @dev Calling Conditions:
 	 *
 	 * - `caller` of this function must have the "RECOVERY_ROLE".
 	 * - {ERC20F} is not paused.(checked internally by {_beforeTokenTransfer}).
-	 * - `account` address must be not be allowed to hold tokens.
+	 * - `account` address must be present in the deny list (not allowed to hold tokens).
 	 * - `account` must be a non-zero address. (checked internally in {ERC20Upgradeable._transfer})
 	 * - `amount` is greater than 0.
 	 * - `amount` is less than or equal to the balance of the account. (checked internally in {ERC20Upgradeable._transfer})
 	 *
 	 * This function emits a {TokensRecovered} event, signalling that the funds of the given address were recovered.
 	 *
-	 * @param account The address to recover the tokens from.
+	 * @param account The address (on the deny list) to recover the tokens from.
 	 * @param amount The amount to be recovered from the balance of the `account`.
 	 */
 	function recoverTokens(address account, string memory ref ,uint256 amount) external virtual onlyRole(RECOVERY_ROLE) {
@@ -169,49 +170,50 @@ contract BBRLPlus is ERC20, ERC20Burnable, ERC20Pausable, AccessControl, ERC20Pe
 	}
 
     /**
-     * @notice Add an address to the allowlist.
-     * @dev Only accounts with DEFAULT_ADMIN_ROLE can call this function.
-     * @param account The address to add to the allowlist.
-     */
-    function addToAllowlist(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(account != address(0), "Cannot add zero address");
-        _allowList.add(account);
-    }
+	/**
+	 * @notice Add an address to the deny list (blocks participation).
+	 * @dev Only accounts with DEFAULT_ADMIN_ROLE can call this function.
+	 * @param account The address to add to the deny list.
+	 */
+	function addToDenylist(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+		require(account != address(0), "Cannot add zero address");
+		_denyList.add(account);
+	}
 
-    /**
-     * @notice Remove an address from the allowlist.
-     * @dev Only accounts with DEFAULT_ADMIN_ROLE can call this function.
-     * @param account The address to remove from the allowlist.
-     */
-    function removeFromAllowlist(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _allowList.remove(account);
-    }
+	/**
+	 * @notice Remove an address from the deny list (re-allows participation).
+	 * @dev Only accounts with DEFAULT_ADMIN_ROLE can call this function.
+	 * @param account The address to remove from the deny list.
+	 */
+	function removeFromDenylist(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+		_denyList.remove(account);
+	}
 
-    /**
-     * @notice Check if an address is in the allowlist.
-     * @param account The address to check.
-     * @return True if the address is in the allowlist, false otherwise.
-     */
-    function isInAllowlist(address account) external view returns (bool) {
-        return _allowList.contains(account);
-    }
+	/**
+	 * @notice Check if an address is denied.
+	 * @param account The address to check.
+	 * @return True if the address is in the deny list, false otherwise.
+	 */
+	function isDenied(address account) external view returns (bool) {
+		return _denyList.contains(account);
+	}
 
-    /**
-     * @notice Get the number of addresses in the allowlist.
-     * @return The total count of addresses in the allowlist.
-     */
-    function getAllowlistLength() external view returns (uint256) {
-        return _allowList.length();
-    }
+	/**
+	 * @notice Get the number of addresses in the deny list.
+	 * @return The total count of addresses in the deny list.
+	 */
+	function getDenylistLength() external view returns (uint256) {
+		return _denyList.length();
+	}
 
-    /**
-     * @notice Get an address from the allowlist by index.
-     * @param index The index of the address to retrieve.
-     * @return The address at the specified index.
-     */
-    function getAllowlistAddress(uint256 index) external view returns (address) {
-        return _allowList.at(index);
-    }
+	/**
+	 * @notice Get an address from the deny list by index.
+	 * @param index The index of the address to retrieve.
+	 * @return The address at the specified index.
+	 */
+	function getDenylistAddress(uint256 index) external view returns (address) {
+		return _denyList.at(index);
+	}
 
     /**
 	 * @notice This is a function used to transfer tokens from the sender to
@@ -232,12 +234,12 @@ contract BBRLPlus is ERC20, ERC20Burnable, ERC20Pausable, AccessControl, ERC20Pe
 	 * @return True if the function was successful.
 	 */
 	function transfer(address to, uint256 amount) public virtual override whenNotPaused returns (bool) {
-		if(!_allowList.contains(to)) {
-            revert LibErrors.UnauthorizedReceiver();
-        }
-        if(!_allowList.contains(_msgSender())) {
-            revert LibErrors.UnauthorizedCaller();
-        }
+		if(_denyList.contains(to)) {
+			revert LibErrors.UnauthorizedReceiver();
+		}
+		if(_denyList.contains(_msgSender())) {
+			revert LibErrors.UnauthorizedCaller();
+		}
 		return super.transfer(to, amount);
 	}
 
@@ -262,13 +264,13 @@ contract BBRLPlus is ERC20, ERC20Burnable, ERC20Pausable, AccessControl, ERC20Pe
 	 * @return True if the function was successful.
 	 */
 	function transferWithRef(address to, uint256 amount, string memory ref) public virtual whenNotPaused returns (bool) {
-		if(!_allowList.contains(to)) {
-            revert LibErrors.UnauthorizedReceiver();
-        }
-        if(!_allowList.contains(_msgSender())) {
-            revert LibErrors.UnauthorizedCaller();
-        }
-        emit TokensTransferred(to, ref, amount);
+		if(_denyList.contains(to)) {
+			revert LibErrors.UnauthorizedReceiver();
+		}
+		if(_denyList.contains(_msgSender())) {
+			revert LibErrors.UnauthorizedCaller();
+		}
+		emit TokensTransferred(to, ref, amount);
 		return super.transfer(to, amount);
 	}
 
@@ -296,14 +298,14 @@ contract BBRLPlus is ERC20, ERC20Burnable, ERC20Pausable, AccessControl, ERC20Pe
 	 * @return True if the function was successful.
 	 */
 	function transferFrom(address from, address to, uint256 amount) public virtual override whenNotPaused returns (bool) {
-		if(!_allowList.contains(from)) {
-            revert LibErrors.UnauthorizedCaller();
-        }
-        if(!_allowList.contains(to)) {
-            revert LibErrors.UnauthorizedReceiver();
-        }
+		if(_denyList.contains(from)) {
+			revert LibErrors.UnauthorizedCaller();
+		}
+		if(_denyList.contains(to)) {
+			revert LibErrors.UnauthorizedReceiver();
+		}
 		return super.transferFrom(from, to, amount);
-	}   
+	}  
 
     // The following functions are overrides required by Solidity.
 

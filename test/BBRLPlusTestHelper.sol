@@ -2,14 +2,14 @@
 pragma solidity ^0.8.27;
 
 import {Test, console} from "forge-std/Test.sol";
-import {BBRLPlus} from "../src/BBRLPlus.sol";
+import {DEMOBR} from "../src/BBRLPlus.sol";
 
 /**
  * @title BBRLPlus Test Helper
  * @notice Helper contract with common test utilities and setup functions
  */
 abstract contract BBRLPlusTestHelper is Test {
-    BBRLPlus public token;
+    DEMOBR public token;
     
     // Standard test addresses
     address public constant ADMIN = address(0x1);
@@ -42,7 +42,7 @@ abstract contract BBRLPlusTestHelper is Test {
      * @param symbol Token symbol
      */
     function deployFreshToken(string memory name, string memory symbol) public {
-        token = new BBRLPlus(
+        token = new DEMOBR(
             ADMIN,
             PAUSER,
             MINTER,
@@ -54,18 +54,10 @@ abstract contract BBRLPlusTestHelper is Test {
     }
     
     /**
-     * @notice Setup standard allowlist with test users
+     * @notice (Deny list model) Standard setup does not add users to deny list; all are allowed by default.
      */
-    function setupStandardAllowlist() public {
-        vm.startPrank(ADMIN);
-        token.addToAllowlist(USER_A);
-        token.addToAllowlist(USER_B);
-        token.addToAllowlist(USER_C);
-        token.addToAllowlist(USER_D);
-        token.addToAllowlist(MINTER);
-        token.addToAllowlist(BURNER);
-        token.addToAllowlist(RECOVERY);
-        vm.stopPrank();
+    function setupStandardDenylist() public {
+        // Intentionally empty
     }
     
     /**
@@ -92,7 +84,7 @@ abstract contract BBRLPlusTestHelper is Test {
      * @notice Setup a standard test scenario with pre-minted tokens
      */
     function setupStandardScenario() public {
-        setupStandardAllowlist();
+    setupStandardDenylist();
         
         uint256[] memory amounts = new uint256[](4);
         amounts[0] = LARGE_AMOUNT;
@@ -110,29 +102,28 @@ abstract contract BBRLPlusTestHelper is Test {
     }
     
     /**
-     * @notice Add a user to allowlist and mint tokens in one transaction
+     * @notice Mint tokens to user (deny list model: user already allowed unless denied)
      * @param user User address
      * @param amount Amount to mint
      * @param ref Reference string
      */
     function addUserAndMint(address user, uint256 amount, string memory ref) public {
-        vm.prank(ADMIN);
-        token.addToAllowlist(user);
+    // In deny list model user is allowed unless explicitly denied
         
         vm.prank(MINTER);
         token.mintRef(user, amount, ref);
     }
     
     /**
-     * @notice Remove user from allowlist and recover their tokens
+     * @notice Add user to deny list then (if balance > 0) recover their tokens
      * @param user User address
      * @param ref Reference string
      */
     function removeUserAndRecover(address user, string memory ref) public {
         uint256 userBalance = token.balanceOf(user);
         
-        vm.prank(ADMIN);
-        token.removeFromAllowlist(user);
+    vm.prank(ADMIN);
+    token.addToDenylist(user);
         
         if (userBalance > 0) {
             vm.prank(RECOVERY);
@@ -205,11 +196,11 @@ abstract contract BBRLPlusTestHelper is Test {
         // Total supply should be at least the known balances
         assertGe(token.totalSupply(), knownBalances);
         
-        // Verify allowlist integrity
-        uint256 allowlistLength = token.getAllowlistLength();
-        for (uint256 i = 0; i < allowlistLength; i++) {
-            address user = token.getAllowlistAddress(i);
-            assertTrue(token.isInAllowlist(user));
+        // Verify deny list integrity (all entries should be denied)
+        uint256 denylistLength = token.getDenylistLength();
+        for (uint256 i = 0; i < denylistLength; i++) {
+            address user = token.getDenylistAddress(i);
+            assertTrue(token.isDenied(user));
         }
     }
     
@@ -220,7 +211,7 @@ abstract contract BBRLPlusTestHelper is Test {
         console.log("=== Contract State ===");
         console.log("Total Supply:", token.totalSupply());
         console.log("Paused:", token.paused());
-        console.log("Allowlist Length:", token.getAllowlistLength());
+    console.log("Denylist Length:", token.getDenylistLength());
         console.log("USER_A Balance:", token.balanceOf(USER_A));
         console.log("USER_B Balance:", token.balanceOf(USER_B));
         console.log("USER_C Balance:", token.balanceOf(USER_C));
@@ -268,7 +259,7 @@ abstract contract BBRLPlusTestHelper is Test {
         vm.startPrank(ADMIN);
         for (uint256 i = 0; i < 50; i++) {
             address newUser = address(uint160(0x5000 + i));
-            token.addToAllowlist(newUser);
+            token.addToDenylist(newUser);
         }
         vm.stopPrank();
     }

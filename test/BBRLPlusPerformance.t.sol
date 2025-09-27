@@ -12,7 +12,7 @@ contract BBRLPlusPerformanceTest is BBRLPlusTestHelper {
     
     function setUp() public {
         deployFreshToken("Brazilian Real Plus Perf", "BBRL+PERF");
-        setupStandardAllowlist();
+    setupStandardDenylist();
     }
     
     // ========== GAS BENCHMARK TESTS ==========
@@ -71,37 +71,37 @@ contract BBRLPlusPerformanceTest is BBRLPlusTestHelper {
         console.log("TransferWithRef gas usage:", gasUsed);
     }
     
-    function test_GasBenchmark_AllowlistOperations() public {
-        console.log("=== Gas Benchmark: Allowlist Operations ===");
+    function test_GasBenchmark_DenylistOperations() public {
+        console.log("=== Gas Benchmark: Denylist Operations ===");
         
         uint256 gasUsed;
         address testUser = address(0x9999);
         
-        // Benchmark add to allowlist
+        // Benchmark add to deny list
         uint256 gasBefore = gasleft();
         vm.prank(ADMIN);
-        token.addToAllowlist(testUser);
+        token.addToDenylist(testUser);
         gasUsed = gasBefore - gasleft();
         
-        console.log("Add to allowlist gas usage:", gasUsed);
-        assertLt(gasUsed, 90000, "Add to allowlist gas usage too high");
+        console.log("Add to denylist gas usage:", gasUsed);
+        assertLt(gasUsed, 90000, "Add to denylist gas usage too high");
         
-        // Benchmark allowlist check
+        // Benchmark deny list check
         gasBefore = gasleft();
-        bool isInList = token.isInAllowlist(testUser);
+        bool isDeniedAddr = token.isDenied(testUser);
         gasUsed = gasBefore - gasleft();
         
-        console.log("Allowlist check gas usage:", gasUsed);
-        assertTrue(isInList);
-        assertLt(gasUsed, 5000, "Allowlist check gas usage too high");
+        console.log("Denylist check gas usage:", gasUsed);
+        assertTrue(isDeniedAddr);
+        assertLt(gasUsed, 5000, "Denylist check gas usage too high");
         
-        // Benchmark remove from allowlist
+        // Benchmark remove from deny list
         gasBefore = gasleft();
         vm.prank(ADMIN);
-        token.removeFromAllowlist(testUser);
+        token.removeFromDenylist(testUser);
         gasUsed = gasBefore - gasleft();
         
-        console.log("Remove from allowlist gas usage:", gasUsed);
+        console.log("Remove from denylist gas usage:", gasUsed);
     }
     
     function test_GasBenchmark_RoleOperations() public {
@@ -139,8 +139,8 @@ contract BBRLPlusPerformanceTest is BBRLPlusTestHelper {
     
     // ========== SCALABILITY TESTS ==========
     
-    function test_AllowlistScalability() public {
-        console.log("=== Allowlist Scalability Test ===");
+    function test_DenylistScalability() public {
+        console.log("=== Denylist Scalability Test ===");
         
         uint256[] memory gasUsages = new uint256[](5);
         uint256[] memory sizes = new uint256[](5);
@@ -152,29 +152,29 @@ contract BBRLPlusPerformanceTest is BBRLPlusTestHelper {
         
         for (uint256 i = 0; i < sizes.length; i++) {
             // Add users to reach target size
-            uint256 currentSize = token.getAllowlistLength();
+            uint256 currentSize = token.getDenylistLength();
             uint256 targetSize = sizes[i];
             
             vm.startPrank(ADMIN);
             for (uint256 j = currentSize; j < targetSize; j++) {
                 address newUser = address(uint160(0x6000 + j));
-                token.addToAllowlist(newUser);
+                token.addToDenylist(newUser);
             }
             vm.stopPrank();
             
             // Measure gas for checking last user
             address lastUser = address(uint160(0x6000 + targetSize - 1));
             uint256 gasBefore = gasleft();
-            token.isInAllowlist(lastUser);
+            token.isDenied(lastUser);
             gasUsages[i] = gasBefore - gasleft();
             
-            console.log("Allowlist size:", targetSize, "Check gas:", gasUsages[i]);
+            console.log("Denylist size:", targetSize, "Check gas:", gasUsages[i]);
         }
         
-        // Verify gas usage doesn't grow linearly with allowlist size
+    // Verify gas usage doesn't grow linearly with deny list size
         // EnumerableSet should provide O(1) lookup
         for (uint256 i = 0; i < gasUsages.length; i++) {
-            assertLt(gasUsages[i], 10000, "Allowlist check gas too high for large sets");
+            assertLt(gasUsages[i], 10000, "Denylist check gas too high for large sets");
         }
     }
     
@@ -216,8 +216,8 @@ contract BBRLPlusPerformanceTest is BBRLPlusTestHelper {
     
     // ========== STRESS TESTS ==========
     
-    function test_StressTesting_MaxAllowlistOperations() public {
-        console.log("=== Stress Test: Max Allowlist Operations ===");
+    function test_StressTesting_MaxDenylistOperations() public {
+        console.log("=== Stress Test: Max Denylist Operations ===");
         
         uint256 maxOperations = 1000;
         uint256 batchSize = 100;
@@ -225,30 +225,29 @@ contract BBRLPlusPerformanceTest is BBRLPlusTestHelper {
         for (uint256 batch = 0; batch < maxOperations / batchSize; batch++) {
             vm.startPrank(ADMIN);
             
-            // Add batch of users
+            // Add batch of users to deny list
             for (uint256 i = 0; i < batchSize; i++) {
                 address newUser = address(uint160(0x7000 + (batch * batchSize) + i));
-                token.addToAllowlist(newUser);
+                token.addToDenylist(newUser);
             }
             
             vm.stopPrank();
             
-            // Verify allowlist integrity every few batches
+            // Verify deny list integrity every few batches
             if (batch % 3 == 0) {
                 verifyTokenStateConsistency();
             }
         }
         
-        uint256 finalSize = token.getAllowlistLength();
-        console.log("Final allowlist size:", finalSize);
+        uint256 finalSize = token.getDenylistLength();
+        console.log("Final denylist size:", finalSize);
         assertGe(finalSize, maxOperations);
         
-        // Test that operations still work with large allowlist
+        // Test that operations still work with large deny list by ensuring transfers blocked if denied
         address testUser = address(0x9999);
         vm.prank(ADMIN);
-        token.addToAllowlist(testUser);
-        
-        assertTrue(token.isInAllowlist(testUser));
+        token.addToDenylist(testUser);
+        assertTrue(token.isDenied(testUser));
     }
     
     function test_StressTesting_HighVolumeTransactions() public {
@@ -258,8 +257,7 @@ contract BBRLPlusPerformanceTest is BBRLPlusTestHelper {
         address[] memory users = new address[](10);
         for (uint256 i = 0; i < users.length; i++) {
             users[i] = address(uint160(0x8000 + i));
-            vm.prank(ADMIN);
-            token.addToAllowlist(users[i]);
+            // Users are allowed by default (not denied)
             
             vm.prank(MINTER);
             token.mintRef(users[i], MEDIUM_AMOUNT, "STRESS-SETUP");
@@ -295,11 +293,11 @@ contract BBRLPlusPerformanceTest is BBRLPlusTestHelper {
     
     // ========== MEMORY EFFICIENCY TESTS ==========
     
-    function test_MemoryEfficiency_AllowlistStorage() public {
-        console.log("=== Memory Efficiency: Allowlist Storage ===");
+    function test_MemoryEfficiency_DenylistStorage() public {
+        console.log("=== Memory Efficiency: Denylist Storage ===");
         
-        uint256 initialSize = token.getAllowlistLength();
-        console.log("Initial allowlist size:", initialSize);
+    uint256 initialSize = token.getDenylistLength();
+    console.log("Initial denylist size:", initialSize);
         
         // Add many unique users
         uint256 usersToAdd = 500;
@@ -307,23 +305,23 @@ contract BBRLPlusPerformanceTest is BBRLPlusTestHelper {
         vm.startPrank(ADMIN);
         for (uint256 i = 0; i < usersToAdd; i++) {
             address newUser = address(uint160(0x9000 + i));
-            token.addToAllowlist(newUser);
+            token.addToDenylist(newUser);
         }
         vm.stopPrank();
         
-        uint256 finalSize = token.getAllowlistLength();
-        console.log("Final allowlist size:", finalSize);
+    uint256 finalSize = token.getDenylistLength();
+    console.log("Final denylist size:", finalSize);
         assertEq(finalSize, initialSize + usersToAdd);
         
         // Test removal doesn't break anything
         vm.startPrank(ADMIN);
         for (uint256 i = 0; i < usersToAdd / 4; i++) {
             address userToRemove = address(uint160(0x9000 + i));
-            token.removeFromAllowlist(userToRemove);
+            token.removeFromDenylist(userToRemove);
         }
         vm.stopPrank();
         
-        uint256 afterRemovalSize = token.getAllowlistLength();
+    uint256 afterRemovalSize = token.getDenylistLength();
         console.log("Size after removals:", afterRemovalSize);
         assertEq(afterRemovalSize, finalSize - (usersToAdd / 4));
     }

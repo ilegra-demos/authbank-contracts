@@ -2,22 +2,22 @@
 pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
-import {BBRLPlus} from "../src/BBRLPlus.sol";
+import {DEMOBR} from "../src/BBRLPlus.sol";
 
 /**
  * @title Admin BBRLPlus Script
  * @notice Script para funcoes administrativas do contrato BBRLPlus
- * @dev Use este script para gerenciar roles, allowlist e operacoes administrativas
+ * @dev Use este script para gerenciar roles, denylist e operacoes administrativas
  */
 contract AdminBBRLPlus is Script {
-    BBRLPlus public bbrlPlus;
+    DEMOBR public bbrlPlus;
     
     // Endereco do contrato implantado - deve ser configurado antes de executar
     address public constant CONTRACT_ADDRESS = address(0); // Substitua pelo endereco real
     
     function setUp() public {
         // Conecta ao contrato ja implantado
-        bbrlPlus = BBRLPlus(CONTRACT_ADDRESS);
+        bbrlPlus = DEMOBR(CONTRACT_ADDRESS);
     }
     
     /**
@@ -28,7 +28,7 @@ contract AdminBBRLPlus is Script {
         
         // Exemplo de uso - descomente as funcoes que desejar executar
         // grantMinterRole(0x1234567890123456789012345678901234567890);
-        // addToAllowlist(0x1234567890123456789012345678901234567890);
+    // addToDenylist(0x1234567890123456789012345678901234567890); // exemplo: negar um endereco
         // pauseContract();
         // unpauseContract();
         // recoverTokens(0x1234567890123456789012345678901234567890, "RECOVERY-001", 100 * 10**18);
@@ -197,39 +197,39 @@ contract AdminBBRLPlus is Script {
     }
     
     /**
-     * @notice Adiciona um endereco a allowlist
+     * @notice Adiciona um endereco a deny list (bloqueia transferencias)
      * @param account Endereco a ser adicionado
      */
-    function addToAllowlist(address account) public {
-        console.log("=== Adicionando a AllowList ===");
+    function addToDenylist(address account) public {
+        console.log("=== Adicionando a DenyList ===");
         console.log("Endereco:", account);
         
-        bool wasInList = bbrlPlus.isInAllowlist(account);
+        bool wasInList = bbrlPlus.isDenied(account);
         console.log("Estava na lista antes:", wasInList);
         
-        bbrlPlus.addToAllowlist(account);
+        bbrlPlus.addToDenylist(account);
         
-        bool isInListNow = bbrlPlus.isInAllowlist(account);
+        bool isInListNow = bbrlPlus.isDenied(account);
         console.log("Esta na lista agora:", isInListNow);
-        console.log("Endereco adicionado a AllowList com sucesso!");
+        console.log("Endereco adicionado a DenyList com sucesso!");
     }
     
     /**
-     * @notice Remove um endereco da allowlist
+     * @notice Remove um endereco da deny list (volta a poder transferir/receber)
      * @param account Endereco a ser removido
      */
-    function removeFromAllowlist(address account) public {
-        console.log("=== Removendo da AllowList ===");
+    function removeFromDenylist(address account) public {
+        console.log("=== Removendo da DenyList ===");
         console.log("Endereco:", account);
         
-        bool wasInList = bbrlPlus.isInAllowlist(account);
+        bool wasInList = bbrlPlus.isDenied(account);
         console.log("Estava na lista antes:", wasInList);
         
-        bbrlPlus.removeFromAllowlist(account);
+        bbrlPlus.removeFromDenylist(account);
         
-        bool isInListNow = bbrlPlus.isInAllowlist(account);
+        bool isInListNow = bbrlPlus.isDenied(account);
         console.log("Esta na lista agora:", isInListNow);
-        console.log("Endereco removido da AllowList com sucesso!");
+        console.log("Endereco removido da DenyList com sucesso!");
     }
     
     /**
@@ -293,32 +293,32 @@ contract AdminBBRLPlus is Script {
     }
     
     /**
-     * @notice Adiciona multiplos enderecos a allowlist
+     * @notice Adiciona multiplos enderecos a deny list
      * @param accounts Array de enderecos a serem adicionados
      */
-    function addMultipleToAllowlist(address[] memory accounts) public {
-        console.log("=== Adicionando Multiplos Enderecos a AllowList ===");
+    function addMultipleToDenylist(address[] memory accounts) public {
+        console.log("=== Adicionando Multiplos Enderecos a DenyList ===");
         console.log("Quantidade de enderecos:", accounts.length);
         
         for (uint256 i = 0; i < accounts.length; i++) {
             console.log("Adicionando endereco", i, ":", accounts[i]);
-            bbrlPlus.addToAllowlist(accounts[i]);
+            bbrlPlus.addToDenylist(accounts[i]);
         }
         
         console.log("Todos os enderecos adicionados com sucesso!");
     }
     
     /**
-     * @notice Remove multiplos enderecos da allowlist
+     * @notice Remove multiplos enderecos da deny list
      * @param accounts Array de enderecos a serem removidos
      */
-    function removeMultipleFromAllowlist(address[] memory accounts) public {
-        console.log("=== Removendo Multiplos Enderecos da AllowList ===");
+    function removeMultipleFromDenylist(address[] memory accounts) public {
+        console.log("=== Removendo Multiplos Enderecos da DenyList ===");
         console.log("Quantidade de enderecos:", accounts.length);
         
         for (uint256 i = 0; i < accounts.length; i++) {
             console.log("Removendo endereco", i, ":", accounts[i]);
-            bbrlPlus.removeFromAllowlist(accounts[i]);
+            bbrlPlus.removeFromDenylist(accounts[i]);
         }
         
         console.log("Todos os enderecos removidos com sucesso!");
@@ -343,6 +343,6 @@ contract AdminBBRLPlus is Script {
         console.log("Minter:", bbrlPlus.hasRole(MINTER_ROLE, account));
         console.log("Burner:", bbrlPlus.hasRole(BURNER_ROLE, account));
         console.log("Recovery:", bbrlPlus.hasRole(RECOVERY_ROLE, account));
-        console.log("Na AllowList:", bbrlPlus.isInAllowlist(account));
+        console.log("Na DenyList:", bbrlPlus.isDenied(account));
     }
 }

@@ -3,7 +3,7 @@ pragma solidity ^0.8.27;
 
 import {Test, console} from "forge-std/Test.sol";
 import {stdError} from "forge-std/StdError.sol";
-import {BBRLPlus} from "../src/BBRLPlus.sol";
+import {DEMOBR} from "../src/BBRLPlus.sol";
 import {LibErrors} from "../src/Utils/Errors.sol";
 
 /**
@@ -11,7 +11,7 @@ import {LibErrors} from "../src/Utils/Errors.sol";
  * @notice Comprehensive tests for the BBRLPlus token contract
  */
 contract BBRLPlusTest is Test {
-    BBRLPlus public token;
+    DEMOBR public token;
     
     // Test addresses
     address public constant ADMIN = address(0x1);
@@ -40,7 +40,7 @@ contract BBRLPlusTest is Test {
     
     function setUp() public {
         // Deploy the contract with role assignments
-        token = new BBRLPlus(
+        token = new DEMOBR(
             ADMIN,      // defaultAdmin
             PAUSER,     // pauser
             MINTER,     // minter
@@ -50,13 +50,9 @@ contract BBRLPlusTest is Test {
             TOKEN_SYMBOL
         );
         
-        // Setup initial allowlist for testing
+    // Setup: initially deny list is empty (addresses are allowed unless denied)
         vm.startPrank(ADMIN);
-        token.addToAllowlist(USER_A);
-        token.addToAllowlist(USER_B);
-        token.addToAllowlist(USER_C);
-        token.addToAllowlist(MINTER);
-        token.addToAllowlist(BURNER);
+    // No addresses added to deny list in setup
         vm.stopPrank();
     }
     
@@ -68,7 +64,7 @@ contract BBRLPlusTest is Test {
         assertEq(token.decimals(), 18);
         assertEq(token.totalSupply(), INITIAL_SUPPLY);
         assertEq(token.paused(), false);
-        assertEq(token.getAllowlistLength(), 5); // 4 users + minter + burner
+    assertEq(token.getDenylistLength(), 0); // deny list starts empty
     }
     
     function test_InitialRoles() public view {
@@ -248,29 +244,27 @@ contract BBRLPlusTest is Test {
         vm.stopPrank();
     }
     
-    function test_RevertWhen_Transfer_UnauthorizedSender() public {
-        // First mint some tokens to unauthorized user (this should not happen in practice)
+    function test_RevertWhen_Transfer_DeniedSender() public {
+        // Mint tokens to user then deny them
         vm.prank(MINTER);
-        token.mintRef(UNAUTHORIZED_USER, TEST_AMOUNT, TEST_REF);
-        
-        vm.startPrank(UNAUTHORIZED_USER);
-        
+        token.mintRef(USER_A, TEST_AMOUNT, TEST_REF);
+        vm.prank(ADMIN);
+        token.addToDenylist(USER_A);
+        vm.startPrank(USER_A);
         vm.expectRevert(abi.encodeWithSignature("UnauthorizedCaller()"));
-        token.transfer(USER_B, TEST_AMOUNT);
-        
+        token.transfer(USER_B, TEST_AMOUNT / 2);
         vm.stopPrank();
     }
     
-    function test_RevertWhen_Transfer_UnauthorizedReceiver() public {
-        // First mint some tokens
+    function test_RevertWhen_Transfer_DeniedReceiver() public {
+        // Mint tokens to sender and deny receiver
         vm.prank(MINTER);
         token.mintRef(USER_A, TEST_AMOUNT, TEST_REF);
-        
+        vm.prank(ADMIN);
+        token.addToDenylist(USER_B);
         vm.startPrank(USER_A);
-        
         vm.expectRevert(abi.encodeWithSignature("UnauthorizedReceiver()"));
-        token.transfer(UNAUTHORIZED_USER, TEST_AMOUNT);
-        
+        token.transfer(USER_B, TEST_AMOUNT / 2);
         vm.stopPrank();
     }
     
@@ -319,22 +313,22 @@ contract BBRLPlusTest is Test {
         vm.stopPrank();
     }
     
-    // ========== ALLOWLIST TESTS ==========
+    // ========== DENYLIST TESTS ==========
     
-    function test_AddToAllowlist_Success() public {
+    function test_AddToDenylist_Success() public {
         vm.startPrank(ADMIN);
         
         address newUser = address(0x123);
         
-        token.addToAllowlist(newUser);
+        token.addToDenylist(newUser);
         
-        assertTrue(token.isInAllowlist(newUser));
-        assertEq(token.getAllowlistLength(), 6); // Previous 5 + 1 new
+        assertTrue(token.isDenied(newUser));
+        assertEq(token.getDenylistLength(), 1);
         
         vm.stopPrank();
     }
     
-    function test_RevertWhen_AddToAllowlist_UnauthorizedCaller() public {
+    function test_RevertWhen_AddToDenylist_UnauthorizedCaller() public {
         vm.startPrank(USER_A);
         
         address newUser = address(0x123);
@@ -348,43 +342,46 @@ contract BBRLPlusTest is Test {
             )
         );
         
-        token.addToAllowlist(newUser);
+    token.addToDenylist(newUser);
         
         vm.stopPrank();
     }
     
-    function test_RevertWhen_AddToAllowlist_ZeroAddress() public {
+    function test_RevertWhen_AddToDenylist_ZeroAddress() public {
         vm.startPrank(ADMIN);
         
         vm.expectRevert("Cannot add zero address");
-        token.addToAllowlist(address(0));
+        token.addToDenylist(address(0));
         
         vm.stopPrank();
     }
     
-    function test_RemoveFromAllowlist_Success() public {
+    function test_RemoveFromDenylist_Success() public {
         vm.startPrank(ADMIN);
         
-        assertTrue(token.isInAllowlist(USER_C));
+        token.addToDenylist(USER_C);
+        assertTrue(token.isDenied(USER_C));
         
-        token.removeFromAllowlist(USER_C);
+        token.removeFromDenylist(USER_C);
         
-        assertFalse(token.isInAllowlist(USER_C));
-        assertEq(token.getAllowlistLength(), 4); // Previous 5 - 1
+        assertFalse(token.isDenied(USER_C));
+        assertEq(token.getDenylistLength(), 0);
         
         vm.stopPrank();
     }
     
-    function test_GetAllowlistAddress_Success() public view {
-        address firstUser = token.getAllowlistAddress(0);
-        assertTrue(token.isInAllowlist(firstUser));
+    function test_GetDenylistAddress_RevertsWhenEmpty() public {
+        vm.expectRevert();
+        token.getDenylistAddress(0);
     }
     
-    function test_RevertWhen_GetAllowlistAddress_IndexOutOfBounds() public {
-        uint256 length = token.getAllowlistLength();
-        
+    function test_RevertWhen_GetDenylistAddress_IndexOutOfBounds() public {
+        vm.startPrank(ADMIN);
+        token.addToDenylist(USER_A);
+        vm.stopPrank();
+        uint256 length = token.getDenylistLength();
         vm.expectRevert();
-        token.getAllowlistAddress(length);
+        token.getDenylistAddress(length);
     }
     
     // ========== PAUSE/UNPAUSE TESTS ==========
@@ -458,16 +455,12 @@ contract BBRLPlusTest is Test {
     // ========== RECOVERY TESTS ==========
     
     function test_RecoverTokens_Success() public {
-        // First mint tokens to unauthorized user and then remove from allowlist
-        vm.startPrank(ADMIN);
-        token.addToAllowlist(UNAUTHORIZED_USER);
-        vm.stopPrank();
-        
+    // First mint tokens to a user then add them to deny list to simulate violation
         vm.prank(MINTER);
         token.mintRef(UNAUTHORIZED_USER, TEST_AMOUNT, TEST_REF);
         
         vm.prank(ADMIN);
-        token.removeFromAllowlist(UNAUTHORIZED_USER);
+    token.addToDenylist(UNAUTHORIZED_USER);
         
         vm.startPrank(RECOVERY);
         
@@ -551,9 +544,7 @@ contract BBRLPlusTest is Test {
         uint256 value = TEST_AMOUNT;
         uint256 deadline = block.timestamp + 1 hours;
         
-        // Add owner to allowlist
-        vm.prank(ADMIN);
-        token.addToAllowlist(owner);
+    // Owner is allowed by default (not on deny list)
         
         // Create permit signature
         bytes32 domainSeparator = token.DOMAIN_SEPARATOR();
@@ -581,8 +572,7 @@ contract BBRLPlusTest is Test {
         vm.assume(to != address(0));
         vm.assume(amount <= type(uint256).max / 2); // Prevent overflow
         
-        vm.prank(ADMIN);
-        token.addToAllowlist(to);
+    // 'to' address is allowed by default (not denied)
         
         vm.startPrank(MINTER);
         
@@ -637,13 +627,13 @@ contract BBRLPlusTest is Test {
         assertGe(totalSupply, sumOfBalances);
     }
     
-    function invariant_AllowlistIntegrity() public view {
-        uint256 length = token.getAllowlistLength();
+    function invariant_DenylistIntegrity() public view {
+    uint256 length = token.getDenylistLength();
         
         // Verify we can access all indices
         for (uint256 i = 0; i < length; i++) {
-            address addr = token.getAllowlistAddress(i);
-            assertTrue(token.isInAllowlist(addr));
+            address addr = token.getDenylistAddress(i);
+            assertTrue(token.isDenied(addr));
         }
     }
 }

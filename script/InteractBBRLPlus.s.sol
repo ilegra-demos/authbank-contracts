@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
-import {BBRLPlus} from "../src/BBRLPlus.sol";
+import {DEMOBR} from "../src/BBRLPlus.sol";
 
 /**
  * @title Interact BBRLPlus Script
@@ -10,14 +10,14 @@ import {BBRLPlus} from "../src/BBRLPlus.sol";
  * @dev Use este script para realizar operações básicas com o token BBRLPlus
  */
 contract InteractBBRLPlus is Script {
-    BBRLPlus public bbrlPlus;
+    DEMOBR public bbrlPlus;
     
     // Endereço do contrato implantado - deve ser configurado antes de executar
     address public constant CONTRACT_ADDRESS = address(0); // Substitua pelo endereço real
     
     function setUp() public {
         // Conecta ao contrato já implantado
-        bbrlPlus = BBRLPlus(CONTRACT_ADDRESS);
+        bbrlPlus = DEMOBR(CONTRACT_ADDRESS);
     }
     
     /**
@@ -45,7 +45,7 @@ contract InteractBBRLPlus is Script {
         console.log("Decimais:", bbrlPlus.decimals());
         console.log("Supply Total:", bbrlPlus.totalSupply());
         console.log("Contrato pausado:", bbrlPlus.paused());
-        console.log("Tamanho da AllowList:", bbrlPlus.getAllowlistLength());
+    console.log("Tamanho da DenyList:", bbrlPlus.getDenylistLength());
     }
     
     /**
@@ -128,26 +128,26 @@ contract InteractBBRLPlus is Script {
     }
     
     /**
-     * @notice Verifica se um endereco esta na allowlist
+     * @notice Verifica se um endereco esta na deny list
      * @param account Endereco a ser verificado
      */
-    function checkAllowlist(address account) public view {
-        bool isAllowed = bbrlPlus.isInAllowlist(account);
-        console.log("=== Verificacao da AllowList ===");
+    function checkDenylist(address account) public view {
+        bool isDeniedAddr = bbrlPlus.isDenied(account);
+        console.log("=== Verificacao da DenyList ===");
         console.log("Endereco:", account);
-        console.log("Esta na AllowList:", isAllowed);
+        console.log("Esta na DenyList:", isDeniedAddr);
     }
     
     /**
-     * @notice Lista todos os enderecos na allowlist
+     * @notice Lista todos os enderecos na deny list
      */
-    function listAllowlist() public view {
-        console.log("=== Lista da AllowList ===");
-        uint256 length = bbrlPlus.getAllowlistLength();
+    function listDenylist() public view {
+        console.log("=== Lista da DenyList ===");
+        uint256 length = bbrlPlus.getDenylistLength();
         console.log("Total de enderecos:", length);
         
         for (uint256 i = 0; i < length; i++) {
-            address addr = bbrlPlus.getAllowlistAddress(i);
+            address addr = bbrlPlus.getDenylistAddress(i);
             console.log("Indice", i, ":", addr);
         }
     }

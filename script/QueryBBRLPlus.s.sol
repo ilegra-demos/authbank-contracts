@@ -2,7 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
-import {BBRLPlus} from "../src/BBRLPlus.sol";
+import {DEMOBR} from "../src/BBRLPlus.sol";
 
 /**
  * @title Query BBRLPlus Script
@@ -10,14 +10,14 @@ import {BBRLPlus} from "../src/BBRLPlus.sol";
  * @dev Use este script para obter informacoes sobre balances, allowances e estado do contrato
  */
 contract QueryBBRLPlus is Script {
-    BBRLPlus public bbrlPlus;
+    DEMOBR public bbrlPlus;
     
     // Endereco do contrato implantado - deve ser configurado antes de executar
     address public constant CONTRACT_ADDRESS = address(0); // Substitua pelo endereco real
     
     function setUp() public {
         // Conecta ao contrato ja implantado
-        bbrlPlus = BBRLPlus(CONTRACT_ADDRESS);
+        bbrlPlus = DEMOBR(CONTRACT_ADDRESS);
     }
     
     /**
@@ -26,7 +26,7 @@ contract QueryBBRLPlus is Script {
     function run() public view {
         // Exemplo de uso - descomente as funcoes que desejar executar
         // getContractOverview();
-        // getAllowlistInfo();
+    // getDenylistInfo();
         // getRolesInfo();
         // getBalanceInfo(0x1234567890123456789012345678901234567890);
         // getAllowanceInfo(0x1234567890123456789012345678901234567890, 0x0987654321098765432109876543210987654321);
@@ -49,26 +49,26 @@ contract QueryBBRLPlus is Script {
         console.log("Supply Total Formatado:", formattedSupply);
         
         console.log("Contrato Pausado:", bbrlPlus.paused());
-        console.log("Tamanho da AllowList:", bbrlPlus.getAllowlistLength());
+    console.log("Tamanho da DenyList:", bbrlPlus.getDenylistLength());
         
         console.log("======================================");
     }
     
     /**
-     * @notice Obtem informacoes detalhadas da allowlist
+     * @notice Obtem informacoes detalhadas da deny list
      */
-    function getAllowlistInfo() public view {
+    function getDenylistInfo() public view {
         console.log("======================================");
-        console.log("=== INFORMACOES DA ALLOWLIST ===");
+        console.log("=== INFORMACOES DA DENYLIST ===");
         console.log("======================================");
         
-        uint256 length = bbrlPlus.getAllowlistLength();
-        console.log("Total de enderecos na AllowList:", length);
+        uint256 length = bbrlPlus.getDenylistLength();
+        console.log("Total de enderecos na DenyList:", length);
         
         if (length > 0) {
-            console.log("Enderecos na AllowList:");
+            console.log("Enderecos na DenyList:");
             for (uint256 i = 0; i < length; i++) {
-                address addr = bbrlPlus.getAllowlistAddress(i);
+                address addr = bbrlPlus.getDenylistAddress(i);
                 uint256 balance = bbrlPlus.balanceOf(addr);
                 console.log("Indice:", i);
                 console.log("Endereco:", addr);
@@ -76,7 +76,7 @@ contract QueryBBRLPlus is Script {
                 console.log("---");
             }
         } else {
-            console.log("Nenhum endereco na AllowList");
+            console.log("Nenhum endereco na DenyList");
         }
         
         console.log("======================================");
@@ -141,8 +141,8 @@ contract QueryBBRLPlus is Script {
             console.log("Saldo: 0 (sem tokens)");
         }
         
-        bool inAllowlist = bbrlPlus.isInAllowlist(account);
-        console.log("Na AllowList:", inAllowlist);
+    bool isDeniedAddr = bbrlPlus.isDenied(account);
+    console.log("Na DenyList:", isDeniedAddr);
         
         // Verificar roles
         bytes32 DEFAULT_ADMIN_ROLE = bbrlPlus.DEFAULT_ADMIN_ROLE();
@@ -190,8 +190,8 @@ contract QueryBBRLPlus is Script {
             console.log("Allowance: 0 (sem autorizacao)");
         }
         
-        console.log("Owner na AllowList:", bbrlPlus.isInAllowlist(owner));
-        console.log("Spender na AllowList:", bbrlPlus.isInAllowlist(spender));
+    console.log("Owner na DenyList:", bbrlPlus.isDenied(owner));
+    console.log("Spender na DenyList:", bbrlPlus.isDenied(spender));
         
         console.log("======================================");
     }
@@ -207,8 +207,8 @@ contract QueryBBRLPlus is Script {
         
         console.log("Endereco:", account);
         
-        bool inAllowlist = bbrlPlus.isInAllowlist(account);
-        console.log("Na AllowList:", inAllowlist);
+    bool isDeniedAddr = bbrlPlus.isDenied(account);
+    console.log("Na DenyList:", isDeniedAddr);
         
         bytes32 DEFAULT_ADMIN_ROLE = bbrlPlus.DEFAULT_ADMIN_ROLE();
         bytes32 PAUSER_ROLE = bbrlPlus.PAUSER_ROLE();
@@ -228,7 +228,7 @@ contract QueryBBRLPlus is Script {
         console.log("  Mintar tokens:", canMint);
         console.log("  Queimar tokens:", canBurn);
         console.log("  Recuperar tokens:", canRecover);
-        console.log("  Transferir/Receber:", inAllowlist);
+    console.log("  Transferir/Receber:", !isDeniedAddr);
         
         // Verificacoes de seguranca
         bool isPaused = bbrlPlus.paused();
@@ -242,7 +242,7 @@ contract QueryBBRLPlus is Script {
             console.log("AVISO: Contrato pausado - transferencias bloqueadas");
         }
         
-        if (!inAllowlist && balance > 0) {
+        if (isDeniedAddr && balance > 0) {
             console.log("AVISO: Endereco com saldo mas nao autorizado - tokens podem ser recuperados");
         }
         
@@ -258,39 +258,39 @@ contract QueryBBRLPlus is Script {
         console.log("======================================");
         
         uint256 totalSupply = bbrlPlus.totalSupply();
-        uint256 allowlistLength = bbrlPlus.getAllowlistLength();
+    uint256 denylistLength = bbrlPlus.getDenylistLength();
         
         console.log("Supply Total:", totalSupply);
-        console.log("Enderecos na AllowList:", allowlistLength);
+    console.log("Enderecos na DenyList:", denylistLength);
         
-        if (allowlistLength > 0) {
-            uint256 totalBalanceInAllowlist = 0;
+        if (denylistLength > 0) {
+            uint256 totalBalanceDenied = 0;
             uint256 activeHolders = 0;
             
-            for (uint256 i = 0; i < allowlistLength; i++) {
-                address addr = bbrlPlus.getAllowlistAddress(i);
+            for (uint256 i = 0; i < denylistLength; i++) {
+                address addr = bbrlPlus.getDenylistAddress(i);
                 uint256 balance = bbrlPlus.balanceOf(addr);
-                totalBalanceInAllowlist += balance;
+                totalBalanceDenied += balance;
                 
                 if (balance > 0) {
                     activeHolders++;
                 }
             }
             
-            console.log("Total de tokens em enderecos autorizados:", totalBalanceInAllowlist);
+            console.log("Total de tokens em enderecos negados:", totalBalanceDenied);
             console.log("Holders ativos (com saldo > 0):", activeHolders);
             
             if (totalSupply > 0) {
-                uint256 percentageInAllowlist = (totalBalanceInAllowlist * 100) / totalSupply;
-                console.log("% do supply em enderecos autorizados:", percentageInAllowlist, "%");
+                uint256 percentageDenied = (totalBalanceDenied * 100) / totalSupply;
+                console.log("% do supply em enderecos negados:", percentageDenied, "%");
             }
             
-            if (allowlistLength > 0) {
-                uint256 averageBalance = totalBalanceInAllowlist / allowlistLength;
-                console.log("Saldo medio por endereco autorizado:", averageBalance);
+            if (denylistLength > 0) {
+                uint256 averageBalance = totalBalanceDenied / denylistLength;
+                console.log("Saldo medio por endereco negado:", averageBalance);
             }
         } else {
-            console.log("Nenhum endereco na AllowList");
+            console.log("Nenhum endereco na DenyList");
         }
         
         bool isPaused = bbrlPlus.paused();
@@ -316,18 +316,18 @@ contract QueryBBRLPlus is Script {
         
         // Verificacoes
         bool isPaused = bbrlPlus.paused();
-        bool fromInAllowlist = bbrlPlus.isInAllowlist(from);
-        bool toInAllowlist = bbrlPlus.isInAllowlist(to);
+        bool fromDenied = bbrlPlus.isDenied(from);
+        bool toDenied = bbrlPlus.isDenied(to);
         uint256 fromBalance = bbrlPlus.balanceOf(from);
         
         console.log("Verificacoes:");
         console.log("  Contrato pausado:", isPaused);
-        console.log("  From na AllowList:", fromInAllowlist);
-        console.log("  To na AllowList:", toInAllowlist);
+    console.log("  From na DenyList:", fromDenied);
+    console.log("  To na DenyList:", toDenied);
         console.log("  Saldo do From:", fromBalance);
         console.log("  Saldo suficiente:", fromBalance >= amount);
         
-        bool canTransfer = !isPaused && fromInAllowlist && toInAllowlist && fromBalance >= amount;
+    bool canTransfer = !isPaused && !fromDenied && !toDenied && fromBalance >= amount;
         
         console.log("RESULTADO:");
         if (canTransfer) {
@@ -338,11 +338,11 @@ contract QueryBBRLPlus is Script {
             if (isPaused) {
                 console.log("  Motivo: Contrato pausado");
             }
-            if (!fromInAllowlist) {
-                console.log("  Motivo: Remetente nao autorizado");
+            if (fromDenied) {
+                console.log("  Motivo: Remetente negado");
             }
-            if (!toInAllowlist) {
-                console.log("  Motivo: Destinatario nao autorizado");
+            if (toDenied) {
+                console.log("  Motivo: Destinatario negado");
             }
             if (fromBalance < amount) {
                 console.log("  Motivo: Saldo insuficiente");
