@@ -16,16 +16,17 @@
 4. [Configuração & Ambiente](#-configuração--ambiente)
 5. [Build & Desenvolvimento](#-build--desenvolvimento)
 6. [Contrato Principal](#-contrato-principal-bbrlplussol)
-7. [Scripts (Deploy / Operações / Query / Exemplos)](#-scripts)
-8. [Testes (Unit / Integração / Performance)](#-testes)
-9. [Relatórios: Gas, Cobertura, Snapshots](#-relatórios-gas-cobertura-snapshots)
-10. [Debug & Ferramentas (Forge, Cast, Chisel)](#-debug--ferramentas)
-11. [Métricas & Benchmarks](#-métricas--benchmarks)
-12. [Checklists (Dev / CI / Deploy)](#-checklists)
-13. [Segurança & Boas Práticas](#-segurança--boas-práticas)
-14. [Ambiente & Variáveis (.env)](#-ambiente--variáveis-env)
-15. [Contribuição](#-contribuição)
-16. [Licença](#-licença)
+7. [Novos Contratos (PaymentGroup e PaymentGroupFactory)](#-novos-contratos-paymentgroup-e-paymentgroupfactory)
+8. [Scripts (Deploy / Operações / Query / Exemplos)](#-scripts)
+9. [Testes (Unit / Integração / Performance)](#-testes)
+10. [Relatórios: Gas, Cobertura, Snapshots](#-relatórios-gas-cobertura-snapshots)
+11. [Debug & Ferramentas (Forge, Cast, Chisel)](#-debug--ferramentas)
+12. [Métricas & Benchmarks](#-métricas--benchmarks)
+13. [Checklists (Dev / CI / Deploy)](#-checklists)
+14. [Segurança & Boas Práticas](#-segurança--boas-práticas)
+15. [Ambiente & Variáveis (.env)](#-ambiente--variáveis-env)
+16. [Contribuição](#-contribuição)
+17. [Licença](#-licença)
 
 ---
 
@@ -130,6 +131,89 @@ Invariantes (testadas):
 1. Total supply = soma dos balances
 2. Endereço na denylist não pode ser origem ou destino
 3. Operações pausadas bloqueiam mutações
+
+## 🆕 Novos Contratos (PaymentGroup e PaymentGroupFactory)
+
+### PaymentGroupFactory (`NewGroup.sol`)
+Factory contract para criar e gerenciar instâncias de `PaymentGroup`. Fornece controle de acesso para criação de contratos e mantém um registro de todos os contratos criados com seus parâmetros.
+
+**Principais Funções:**
+- `createPaymentGroup(address _originToken, address _paymentToken, address _admin, uint256 _rewardPercentBps)`: Cria um novo PaymentGroup (apenas CREATOR_ROLE).
+- `getCreatedGroupsCount()`: Retorna o número total de grupos criados.
+- `getGroupInfo(address contractAddress)`: Retorna informações sobre um grupo específico.
+- `getCreatedGroups(uint256 offset, uint256 limit)`: Lista paginada de grupos criados.
+- `grantCreatorRole(address account)` / `revokeCreatorRole(address account)`: Gerenciamento de roles (apenas admin).
+
+**Roles:**
+- `DEFAULT_ADMIN_ROLE`: Controle administrativo.
+- `CREATOR_ROLE`: Permissão para criar novos grupos.
+
+### PaymentGroup (`PaymentGroup.sol`)
+Contrato que gerencia um grupo de participantes e distribui recompensas em um token de pagamento baseado em uma porcentagem do saldo do token de origem. As recompensas são acionadas manualmente por operadores autorizados.
+
+**Principais Funções:**
+- `setTokens(address _tokenA, address _tokenB)`: Configura os tokens de origem e pagamento (apenas admin).
+- `setRewardPercentBps(uint256 newPercent)`: Atualiza a porcentagem de recompensa (apenas admin).
+- `addParticipant(address account)` / `removeParticipant(address account)`: Gerenciamento de participantes (apenas operator).
+- `triggerPayment()`: Aciona distribuição de recompensas para todos os participantes (apenas operator).
+- `previewUserReward(address user)`: Prévia da recompensa para um usuário específico.
+- `previewAllRewards()`: Prévia das recompensas para todos os participantes.
+- `pause()` / `unpause()`: Controle de pausa (apenas admin).
+
+**Roles:**
+- `DEFAULT_ADMIN_ROLE`: Controle administrativo (configuração, pausa).
+- `OPERATOR_ROLE`: Operações diárias (adicionar participantes, acionar pagamentos).
+
+### Explicação Simplificada: Cálculo do `rewardPercentBps`
+O `rewardPercentBps` representa a porcentagem de recompensa em **basis points** (bps), onde:
+- 1% = 10,000 bps
+- 100% = 1,000,000 bps (máximo permitido)
+
+**Fórmula para calcular:**
+```
+rewardPercentBps = (porcentagem desejada em %) * 10,000
+```
+
+**Exemplos:**
+- Para 5%: `5 * 10,000 = 50,000`
+- Para 0.5%: `0.5 * 10,000 = 5,000`
+- Para 10%: `10 * 10,000 = 100,000`
+
+No contrato, a recompensa é calculada como: `rewardAmount = (balanceA * rewardPercentBps) / 1,000,000`
+
+### Exemplos de Invocação
+
+#### Criar um novo PaymentGroup via Factory
+```bash
+# Usando cast para chamar a função createPaymentGroup
+cast send $FACTORY_ADDRESS "createPaymentGroup(address,address,address,uint256)" \
+    $ORIGIN_TOKEN $PAYMENT_TOKEN $ADMIN 50000 \
+    --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+```
+
+#### Adicionar Participante a um PaymentGroup
+```bash
+cast send $PAYMENT_GROUP_ADDRESS "addParticipant(address)" $PARTICIPANT_ADDRESS \
+    --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+```
+
+#### Acionar Distribuição de Recompensas
+```bash
+cast send $PAYMENT_GROUP_ADDRESS "triggerPayment()" \
+    --private-key $PRIVATE_KEY --rpc-url $RPC_URL
+```
+
+#### Prévia de Recompensa para um Usuário
+```bash
+cast call $PAYMENT_GROUP_ADDRESS "previewUserReward(address)" $USER_ADDRESS \
+    --rpc-url $RPC_URL
+```
+
+#### Listar Grupos Criados pela Factory
+```bash
+cast call $FACTORY_ADDRESS "getCreatedGroups(uint256,uint256)" 0 10 \
+    --rpc-url $RPC_URL
+```
 
 ## 📜 Scripts
 
